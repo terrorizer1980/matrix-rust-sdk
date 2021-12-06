@@ -1647,7 +1647,7 @@ pub(crate) mod test {
         let response = keys_upload_response();
         machine.receive_keys_upload_response(&response).await.unwrap();
 
-        (machine, request.one_time_keys.unwrap())
+        (machine, request.one_time_keys)
     }
 
     async fn get_machine_after_query() -> (OlmMachine, OneTimeKeys) {
@@ -1848,7 +1848,7 @@ pub(crate) mod test {
             &machine.user_id,
             &DeviceKeyId::from_parts(DeviceKeyAlgorithm::Ed25519, machine.device_id()),
             ed25519_key,
-            &mut json!(&mut request.one_time_keys.as_mut().unwrap().values_mut().next()),
+            &mut json!(&mut request.one_time_keys.values_mut().next()),
         );
         assert!(ret.is_ok());
 
@@ -1864,7 +1864,7 @@ pub(crate) mod test {
         let mut response = keys_upload_response();
         response.one_time_key_counts.insert(
             DeviceKeyAlgorithm::SignedCurve25519,
-            (request.one_time_keys.unwrap().len() as u64).try_into().unwrap(),
+            (request.one_time_keys.len() as u64).try_into().unwrap(),
         );
 
         machine.receive_keys_upload_response(&response).await.unwrap();

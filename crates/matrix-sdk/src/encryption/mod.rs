@@ -893,9 +893,9 @@ impl Client {
         request: &upload_keys::Request,
     ) -> Result<upload_keys::Response> {
         debug!(
-            "Uploading encryption keys device keys: {}, one-time-keys: {}",
-            request.device_keys.is_some(),
-            request.one_time_keys.as_ref().map_or(0, |k| k.len())
+            device_keys = request.device_keys.is_some(),
+            one_time_key_count = request.one_time_keys.len(),
+            "Uploading public encryption keys",
         );
 
         let response = self.send(request.clone(), None).await?;

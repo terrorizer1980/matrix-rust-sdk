@@ -693,15 +693,15 @@ impl ReadOnlyAccount {
         &self,
     ) -> Option<(
         Option<DeviceKeys>,
-        Option<BTreeMap<Box<DeviceKeyId>, Raw<ruma::encryption::OneTimeKey>>>,
-        Option<BTreeMap<Box<DeviceKeyId>, Raw<ruma::encryption::OneTimeKey>>>,
+        BTreeMap<Box<DeviceKeyId>, Raw<ruma::encryption::OneTimeKey>>,
+        BTreeMap<Box<DeviceKeyId>, Raw<ruma::encryption::OneTimeKey>>,
     )> {
         if !self.should_upload_keys().await {
             return None;
         }
 
         let device_keys = if !self.shared() { Some(self.device_keys().await) } else { None };
-        let one_time_keys = self.signed_one_time_keys().await.ok();
+        let one_time_keys = self.signed_one_time_keys().await.ok().unwrap_or_default();
         let fallback_keys = self.signed_fallback_keys().await;
 
         Some((device_keys, one_time_keys, fallback_keys))
@@ -892,7 +892,7 @@ impl ReadOnlyAccount {
 
     async fn signed_fallback_keys(
         &self,
-    ) -> Option<BTreeMap<Box<DeviceKeyId>, Raw<ruma::encryption::OneTimeKey>>> {
+    ) -> BTreeMap<Box<DeviceKeyId>, Raw<ruma::encryption::OneTimeKey>> {
         if let Some(fallback_key) = self.fallback_key().await {
             let mut fallback_key_map = BTreeMap::new();
             let key_id = fallback_key.index();
@@ -905,9 +905,9 @@ impl ReadOnlyAccount {
                 signed_key.to_raw(),
             );
 
-            Some(fallback_key_map)
+            fallback_key_map
         } else {
-            None
+            BTreeMap::new()
         }
     }
 
@@ -1251,13 +1251,13 @@ mod test {
         let one_time_keys = account
             .keys_for_upload()
             .await
-            .and_then(|(_, k, _)| k)
+            .map(|(_, k, _)| k)
             .expect("Initial keys can't be generated");
 
         let second_one_time_keys = account
             .keys_for_upload()
             .await
-            .and_then(|(_, k, _)| k)
+            .map(|(_, k, _)| k)
             .expect("Second round of one-time keys isn't generated");
 
         let device_key_ids: BTreeSet<&DeviceKeyId> =
@@ -1270,7 +1270,7 @@ mod test {
         account.mark_keys_as_published().await;
         account.update_uploaded_key_count(50);
 
-        let third_one_time_keys = account.keys_for_upload().await.and_then(|(_, k, _)| k);
+        let third_one_time_keys = account.keys_for_upload().await.map(|(_, k, _)| k);
 
         assert!(third_one_time_keys.is_none());
 
@@ -1279,7 +1279,7 @@ mod test {
         let fourth_one_time_keys = account
             .keys_for_upload()
             .await
-            .and_then(|(_, k, _)| k)
+            .map(|(_, k, _)| k)
             .expect("Fourth round of one-time keys isn't generated");
 
         let fourth_device_key_ids: BTreeSet<&DeviceKeyId> =
@@ -1294,7 +1294,7 @@ mod test {
     async fn fallback_key_creation() -> Result<()> {
         let account = ReadOnlyAccount::new(&user_id(), &device_id());
 
-        let fallback_keys = account.keys_for_upload().await.and_then(|(_, _, k)| k);
+        let fallback_keys = account.keys_for_upload().await.map(|(_, _, k)| k);
 
         // We don't create fallback keys since we don't know if the server
         // supports them, we need to receive a sync response to decide if we're
@@ -1306,7 +1306,7 @@ mod test {
         // A `None` here means that the server doesn't support fallback keys, no
         // fallback key gets uploaded.
         account.update_key_counts(&one_time_keys, None).await;
-        let fallback_keys = account.keys_for_upload().await.and_then(|(_, _, k)| k);
+        let fallback_keys = account.keys_for_upload().await.map(|(_, _, k)| k);
         assert!(fallback_keys.is_none());
 
         // The empty array means that the server supports fallback keys but
@@ -1314,14 +1314,14 @@ mod test {
         // a fallback key.
         let unused_fallback_keys = &[];
         account.update_key_counts(&one_time_keys, Some(unused_fallback_keys.as_ref())).await;
-        let fallback_keys = account.keys_for_upload().await.and_then(|(_, _, k)| k);
+        let fallback_keys = account.keys_for_upload().await.map(|(_, _, k)| k);
         assert!(fallback_keys.is_some());
         account.mark_keys_as_published().await;
 
         // There's an unused fallback key on the server, nothing to do here.
         let unused_fallback_keys = &[DeviceKeyAlgorithm::SignedCurve25519];
         account.update_key_counts(&one_time_keys, Some(unused_fallback_keys.as_ref())).await;
-        let fallback_keys = account.keys_for_upload().await.and_then(|(_, _, k)| k);
+        let fallback_keys = account.keys_for_upload().await.map(|(_, _, k)| k);
         assert!(fallback_keys.is_none());
 
         Ok(())
